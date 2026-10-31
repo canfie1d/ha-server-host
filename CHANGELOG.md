@@ -1,5 +1,9 @@
 # Changelog
 
+## 2.0.3
+
+- Remove the one-time import from the old add-ons now that the move is done
+
 ## 2.0.2
 
 - Show each server page's sections as tabs
