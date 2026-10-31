@@ -3,7 +3,6 @@
 Home Assistant add-on repository with one add-on, **HA Server Host** (slug `ha_server_host`, amd64).
 It runs any number of servers on the HA machine, each from its repo's latest GitHub release,
 routes one public port to them by hostname, and keeps each one healthy without touching the others.
-It replaces MCP Host (`mcp_host`).
 
 Install: HA > Settings > Add-ons > Add-on Store > ⋮ > Repositories > add
 `https://github.com/canfie1d/ha-server-host`.
@@ -68,50 +67,100 @@ never restarts the add-on.
 A server repo needs a release workflow that, on a version tag, builds the server and attaches
 `bundle-linux-x64.tar.gz` (and optionally its `.sha256`) to a GitHub Release. The archive holds
 everything needed to run with no install or build step, built on linux-x64 with Node 22 (the
-host's Node) so native modules match, plus `ha-server.json` at its root:
+host's Node) so native modules match, plus `ha-server.json` at its root.
+
+The smallest manifest:
+
+```json
+{
+  "manifestVersion": 1,
+  "name": "hello",
+  "start": ["node", "server.mjs"],
+  "port": 3000,
+  "health": { "heartbeat": "/heartbeat", "health": "/health" }
+}
+```
+
+A fuller one:
 
 ```json
 {
   "manifestVersion": 1,
   "name": "my-app",
-  "displayName": "Personal Chef",
-  "description": "Meal planning web app with an MCP server at /mcp",
-  "version": "1.0.25",
+  "displayName": "My App",
+  "description": "Web app with an MCP server at /mcp",
+  "version": "1.2.0",
   "node": 22,
   "start": ["node", "web/.output/server/index.mjs"],
   "port": 3000,
-  "env": { "MCP_IN_PROCESS": "1", "CHEF_RULES_DIR": "{{bundle}}/rules" },
+  "env": { "RULES_DIR": "{{bundle}}/rules", "CACHE_DIR": "{{data}}/cache" },
   "health": { "heartbeat": "/heartbeat", "health": "/health", "startupSeconds": 90 },
   "mcp": { "path": "/mcp" },
   "hostnames": ["my-app.example.com"],
-  "hostSettings": [],
+  "hostSettings": ["turso"],
   "settings": [
     { "env": "AUTH_SECRET", "label": "Session secret", "secret": true, "required": true },
-    { "env": "TZ", "label": "Time zone", "default": "America/Los_Angeles" }
+    { "env": "TZ", "label": "Time zone", "default": "America/Los_Angeles" },
+    { "env": "TURSO_DATABASE_URL", "label": "Database URL", "required": true, "aliases": ["DATABASE_URL"] }
   ]
 }
 ```
 
-- `start` runs in the bundle folder. An array is run directly (`node` is the host's Node); a string
-  runs through `sh -c`.
-- `port` is the preferred internal port. The host passes the port it assigns as `PORT`; the server
-  must listen on it.
-- `env` values may use `{{bundle}}` (the release folder) and `{{data}}` (`DATA_DIR`).
-- `hostnames` are defaults; they can be changed on the server's page.
-- `hostSettings: ["turso"]` passes the Host page's shared Turso values as `TURSO_DATABASE_URL` and
-  `TURSO_AUTH_TOKEN` (the server's own settings win).
-- `node`, when set, must match the host's Node major version or the release is refused.
+### Manifest fields
 
-## Moving from the old add-ons
+| Field | Required | Meaning |
+|---|---|---|
+| `manifestVersion` | yes | Always `1`. |
+| `name` | yes | Server id: lowercase letters, digits and `-`, up to 41 characters. Names its page, data folder and settings. |
+| `displayName`, `description`, `version` | no | Shown on the server's page. `displayName` defaults to `name`. |
+| `node` | no | Node major version the bundle was built for. If it differs from the host's, the release is refused. |
+| `start` | yes | Command run in the bundle folder. An array is run directly (`node` is the host's Node); a string runs through `sh -c`. |
+| `port` | yes | Preferred internal port (1024 to 65535). The host passes the port it actually assigns as `PORT`; the server must listen on that. |
+| `env` | no | Fixed environment variables. Values may use `{{bundle}}` (the release folder) and `{{data}}` (`DATA_DIR`). |
+| `health.heartbeat` | yes | Path that answers 2xx while the process is alive. |
+| `health.health` | yes | Path that answers 2xx when the server is usable. |
+| `health.startupSeconds` | no | How long a new release has to pass its checks (5 to 600, default 90). |
+| `mcp.path` | no | Where the server's MCP endpoint lives, shown on its page. |
+| `hostnames` | no | Default public hostnames. They can be changed on the server's page. |
+| `hostSettings` | no | Shared values from the Host page to pass in. Today only `turso`, which sets `TURSO_DATABASE_URL` and `TURSO_AUTH_TOKEN` unless the server's own settings set them. |
+| `settings` | no | Fields shown on the server's page, each passed as an environment variable. See below. |
 
-Another add-on cannot read the old add-ons' `/data`, so their final releases export it:
+Each entry in `settings`:
 
-1. Update MCP Host and Financial Advisor to their export releases and download the export file from
-   each one's panel.
-2. Install HA Server Host, set the GitHub token on the Host page, and add each server.
-3. On the Host page, choose an export file under Import. The host lists every setting and data
-   file it will write; Import applies it and restarts the affected servers. Existing data files are
-   kept as `*.before-import`.
+| Key | Meaning |
+|---|---|
+| `env` | Variable name. |
+| `label` | Text shown on the page. |
+| `secret` | `true` hides the value until Show is chosen. |
+| `required` | `true` keeps the server stopped ("needs settings") until a value is set. |
+| `default` | Value used when none is set. |
+| `note` | Help text under the field. |
+| `aliases` | Older variable names the server also reads. A value stored under one of them counts for a required setting. |
+
+The host always sets `PORT`, `HOST`, `DATA_DIR`, `NODE_ENV`, `PATH` and `HOME`, so `env` and
+`settings` may not use those names. Unknown keys are rejected, so a typo shows up as an error on
+the Add page instead of being ignored.
+
+### Adding and removing a server
+
+1. Publish a tagged release with the bundle as above.
+2. For a private repo, set a GitHub token on the Host page (fine-grained, Contents read-only).
+3. Choose Add server in the panel and enter the repo as `owner/repo` or its GitHub URL. The host
+   downloads the latest release, checks the manifest and creates the server's page.
+4. Fill in any required settings. The server starts once nothing required is missing.
+5. Point a hostname at port 8110 (for example a Cloudflare Tunnel public hostname) and set it on
+   the server's page if it differs from the manifest default.
+
+To remove one, choose Remove on its page. The server is stopped and its releases are deleted. You
+choose whether to keep its settings and its `DATA_DIR` folder, so adding it again later can pick
+up where it left off.
+
+## Importing settings and data
+
+The Host page can import an export file (JSON) holding settings and data files for one or more
+servers, for example from an add-on the servers used to run in. The host lists every setting and
+data file it will write before anything changes; Import applies it and restarts only the affected
+servers. Existing data files are kept as `*.before-import`.
 
 ## Development
 

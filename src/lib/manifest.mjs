@@ -4,8 +4,8 @@
 // {
 //   "manifestVersion": 1,
 //   "name": "my-app",
-//   "displayName": "Personal Chef",
-//   "description": "Meal planning web app with an MCP server at /mcp",
+//   "displayName": "My App",
+//   "description": "Web app with an MCP server at /mcp",
 //   "version": "1.0.25",
 //   "node": 22,
 //   "start": ["node", "web/.output/server/index.mjs"],
