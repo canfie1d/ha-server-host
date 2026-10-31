@@ -24,4 +24,4 @@ jobs:
         run: find src test -name '*.mjs' -print0 | xargs -0 -n1 node --check
 
       - name: Test
-        run: node --test --test-timeout=240000 test/
+        run: node --test --test-timeout=240000 test/*.test.mjs

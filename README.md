@@ -116,7 +116,7 @@ Another add-on cannot read the old add-ons' `/data`, so their final releases exp
 ## Development
 
 ```sh
-node --test test/          # end to end: fake GitHub API, real bundles, the host as a subprocess
+node --test test/*.test.mjs # end to end: fake GitHub API, real bundles, the host as a subprocess
 DATA_DIR=./local/data HOST_TRUST_ALL=1 GITHUB_TOKEN=... node src/index.mjs
 ```
 

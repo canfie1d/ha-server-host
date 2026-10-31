@@ -28,7 +28,7 @@ jobs:
           node-version: 22
 
       - name: Test
-        run: node --test --test-timeout=240000 test/
+        run: node --test --test-timeout=240000 test/*.test.mjs
 
       - name: Version
         id: version
