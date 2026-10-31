@@ -85,7 +85,20 @@ const pill = (s) => `<span class="pill ${statusClass(s)}">${esc(STATUS_LABEL[s] 
 const serverHref = (name) => `server/${encodeURIComponent(name)}`;
 // Data handed to inline scripts; "<" is escaped so a value can never close the script tag.
 const json = (v) => JSON.stringify(v).replace(/</g, '\\u003c');
-const when = (iso) => (iso ? `<time datetime="${esc(iso)}">${esc(iso.replace('T', ' ').replace(/\.\d+Z$/, 'Z'))}</time>` : '');
+// Times show in Home Assistant's time zone (the Supervisor passes it as TZ), Pacific when unset.
+const TIME_FORMAT = (() => {
+  const opts = { year: 'numeric', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit', second: '2-digit', timeZoneName: 'short' };
+  try {
+    return new Intl.DateTimeFormat('en-US', { ...opts, timeZone: process.env.TZ || 'America/Los_Angeles' });
+  } catch {
+    return new Intl.DateTimeFormat('en-US', { ...opts, timeZone: 'America/Los_Angeles' });
+  }
+})();
+const when = (iso) => {
+  if (!iso) return '';
+  const t = new Date(iso);
+  return `<time datetime="${esc(iso)}">${esc(Number.isNaN(t.getTime()) ? iso : TIME_FORMAT.format(t))}</time>`;
+};
 
 // Shared by every page's script: escaping, element lookup and JSON requests.
 const CLIENT = `
