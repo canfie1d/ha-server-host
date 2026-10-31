@@ -214,6 +214,12 @@ dialog{border:1px solid var(--line);border-radius:14px;background:var(--card);co
 dialog::backdrop{background:rgba(0,0,0,.4)}
 dialog label{display:flex;gap:8px;align-items:flex-start;margin-top:10px}
 .danger-zone{border-color:var(--bad)}
+.tabs{display:flex;gap:2px;margin:20px 0 16px;border-bottom:1px solid var(--line);overflow-x:auto}
+.tabs button{border:0;border-bottom:2px solid transparent;border-radius:0;background:none;padding:8px 14px;color:var(--muted);font-weight:600}
+.tabs button:hover{color:var(--fg)}
+.tabs button[aria-selected=true]{color:var(--accent);border-bottom-color:var(--accent)}
+.tabs .count{margin-left:6px;font-weight:500;font-size:12px}
+[role=tabpanel] .logbar{margin-top:0}
 `;
 
 /** One server's page: status and actions, its release, hostnames, settings, logs and incidents. */
@@ -236,7 +242,15 @@ ${d.description ? `<p class="lede">${esc(d.description)}</p>` : ''}
 <p id="detail"></p>
 <div class="msg" id="amsg"></div>
 
-<h2 class="section-title">Release</h2>
+<div class="tabs" role="tablist" aria-label="${esc(d.title)}">
+<button role="tab" id="tab-details" aria-controls="details">Details</button>
+<button role="tab" id="tab-settings" aria-controls="settings">Settings</button>
+<button role="tab" id="tab-hostnames" aria-controls="hostnames">Hostnames</button>
+<button role="tab" id="tab-logs" aria-controls="logs">Logs</button>
+<button role="tab" id="tab-incidents" aria-controls="incidents">Incidents${d.incidents.length ? `<span class="count">${d.incidents.length}</span>` : ''}</button>
+</div>
+
+<div role="tabpanel" id="details" aria-labelledby="tab-details">
 <section class="panel"><dl class="facts">
 <div><dt>Installed</dt><dd>${d.current ? `${esc(d.current.tag)}<span class="sub">${when(d.current.installedAt)}</span>` : '<span class="warn">none</span>'}</dd></div>
 <div><dt>Previous</dt><dd>${d.previous ? `${esc(d.previous.tag)} <button id="rollback" style="margin-left:6px">Roll back</button>` : '<span class="hint">none kept</span>'}</dd></div>
@@ -245,16 +259,20 @@ ${d.description ? `<p class="lede">${esc(d.description)}</p>` : ''}
 <div><dt>Endpoints</dt><dd>${endpoints}</dd></div>
 <div><dt>Internal port</dt><dd>${esc(d.port)}<span class="sub">data in <span class="mono">${esc(d.dataDir)}</span></span></dd></div>
 </dl></section>
+<h2 class="section-title">Remove</h2>
+<section class="panel danger-zone"><p class="hint" style="margin-bottom:10px">Stops ${esc(d.title)} and deletes its installed releases. Other servers keep running.</p><button id="remove" class="danger">Remove ${esc(d.title)}</button></section>
+</div>
 
-<h2 class="section-title">Public hostnames</h2>
+<div role="tabpanel" id="hostnames" aria-labelledby="tab-hostnames" hidden>
 <section class="panel">
 <p class="hint" style="margin-bottom:10px">Requests for these hostnames go to this server. In Cloudflare Tunnel, point each one at <span class="mono">http://&lt;Home Assistant host&gt;:${esc(layout.routerPort)}</span>. The first one is passed to the server as <code>PUBLIC_URL</code> unless a setting below overrides it.</p>
 <textarea id="hosts" rows="3" spellcheck="false" placeholder="app.example.com">${esc(d.hostnames.join('\n'))}</textarea>
 <div class="row"><button id="savehosts" class="primary">Save hostnames</button></div>
 <div class="msg" id="hmsg"></div>
 </section>
+</div>
 
-<h2 class="section-title">Settings</h2>
+<div role="tabpanel" id="settings" aria-labelledby="tab-settings" hidden>
 <section class="panel">
 <p class="hint" style="margin-bottom:10px">Passed to the server as environment variables and stored in the host's private <code>/data</code>. Secret values stay hidden until you choose Show. Saving applies the change right away by restarting this server only.</p>
 <div style="text-align:right;margin-bottom:6px"><button id="revealall" hidden>Show all</button></div>
@@ -262,15 +280,16 @@ ${d.description ? `<p class="lede">${esc(d.description)}</p>` : ''}
 <form class="add" id="sadd" autocomplete="off"><input id="sname" placeholder="OTHER_VARIABLE" spellcheck="false" aria-label="Variable name"><input id="sval" type="password" placeholder="value" aria-label="Variable value"><button class="primary">Add</button></form>
 <div class="msg" id="smsg"></div>
 </section>
+</div>
 
+<div role="tabpanel" id="logs" aria-labelledby="tab-logs" hidden>
 <div class="logbar"><h2>Logs</h2><div class="logtools"><span class="hint" id="logstate">live</span><button id="copylog">Copy</button><button id="savelog">Download</button></div></div>
 <pre id="log"></pre>
+</div>
 
-<h2 class="section-title">Incidents</h2>
+<div role="tabpanel" id="incidents" aria-labelledby="tab-incidents" hidden>
 <section class="panel">${incidentList(d.incidents, false)}</section>
-
-<h2 class="section-title">Remove</h2>
-<section class="panel danger-zone"><p class="hint" style="margin-bottom:10px">Stops ${esc(d.title)} and deletes its installed releases. Other servers keep running.</p><button id="remove" class="danger">Remove ${esc(d.title)}</button></section>
+</div>
 
 <dialog id="rmdlg"><form method="dialog">
 <h2>Remove ${esc(d.title)}?</h2>
@@ -442,6 +461,29 @@ $('rmdlg').addEventListener('close',async()=>{
   try{await call('POST',API+'/remove',{keepSettings:$('keepSettings').checked,keepData:$('keepData').checked});location.href='./'}
   catch(e){amsg('bad',e.message)}
 });
+
+// ---- tabs; the open one is kept in the URL fragment so a reload stays on it
+const TABS=[...document.querySelectorAll('[role=tab]')];
+function openTab(id,focus){
+  const tab=TABS.find(t=>t.getAttribute('aria-controls')===id)||TABS[0];
+  for(const t of TABS){
+    const on=t===tab;
+    t.setAttribute('aria-selected',on);t.tabIndex=on?0:-1;
+    $(t.getAttribute('aria-controls')).hidden=!on;
+  }
+  if(focus)tab.focus();
+  history.replaceState(null,'',location.pathname+location.search+'#'+tab.getAttribute('aria-controls'));
+  // A hidden log has no height, so jump to the newest lines once it is shown.
+  if(tab.id==='tab-logs')$('log').scrollTop=$('log').scrollHeight;
+}
+TABS.forEach(t=>t.onclick=()=>openTab(t.getAttribute('aria-controls')));
+$('tab-details').parentElement.addEventListener('keydown',e=>{
+  const i=TABS.indexOf(document.activeElement);if(i<0)return;
+  const n={ArrowRight:i+1,ArrowLeft:i-1,Home:0,End:TABS.length-1}[e.key];
+  if(n===undefined)return;
+  e.preventDefault();openTab(TABS[(n+TABS.length)%TABS.length].getAttribute('aria-controls'),true);
+});
+openTab(location.hash.slice(1));
 
 let timer;
 async function refresh(){
