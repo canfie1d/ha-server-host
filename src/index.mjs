@@ -253,6 +253,19 @@ function updateSecrets(app, body) {
   return { status: 200, body: { ok: true, set: Object.keys(next).sort(), missing: app.missing, action, deferred: !!wanted && !action } };
 }
 
+/**
+ * Every hosted app's stored secrets, in the import format of HA Server Host, which replaces this
+ * add-on and cannot read its /data. Only apps still defined in apps.json are included.
+ */
+function exportForServerHost() {
+  const servers = {};
+  for (const app of apps) {
+    const values = secrets[app.name] || {};
+    if (Object.keys(values).length) servers[app.name] = { settings: { ...values } };
+  }
+  return { format: 'ha-server-host-import', version: 1, source: 'mcp_host', exportedAt: new Date().toISOString(), servers };
+}
+
 const send = (res, status, type, body) => {
   res.writeHead(status, { 'content-type': type, 'cache-control': 'no-store' });
   res.end(body);
@@ -268,6 +281,14 @@ createServer(async (req, res) => {
     const query = new URL(req.url || '/', 'http://x').searchParams;
     if (route.endsWith('/status.json')) {
       return sendJson(res, 200, { apps: apps.map((a) => a.snapshot()), incidents: recentIncidents(50) });
+    }
+    if (route.endsWith('/api/export')) {
+      // Plaintext values: only through HA ingress (the Supervisor), and only from the page's own fetch.
+      const peer = String(req.socket.remoteAddress || '').replace(/^::ffff:/, '');
+      if (!TRUST_ALL && peer !== SUPERVISOR_IP) return sendJson(res, 403, { ok: false, errors: ['the export is only available through Home Assistant'] });
+      if (req.headers['x-requested-with'] !== 'admin') return sendJson(res, 400, { ok: false, errors: ['missing header'] });
+      log('host', 'settings exported for HA Server Host');
+      return sendJson(res, 200, exportForServerHost());
     }
     if (route.endsWith('/api/apps')) {
       if (req.method === 'GET') {

@@ -169,7 +169,26 @@ export function statusPage(snaps, incidents, layout, notice = '') {
 <header class="top"><div><h1>Overview</h1><p class="overall">${esc(overallLine(snaps))}</p></div></header>
 ${cards}
 <h2 class="section-title">Recent incidents</h2>
-<section class="panel">${incidentList(incidents, true)}</section>`,
+<section class="panel">${incidentList(incidents, true)}</section>
+<h2 class="section-title">Moving to HA Server Host</h2>
+<section class="panel"><p>HA Server Host replaces this add-on and cannot read its data. Download this file and import it on the Host page of HA Server Host after adding each app there. It contains every app's secrets in plain text: keep it private and delete it after the import.</p>
+<div style="margin-top:12px;display:flex;gap:8px;align-items:center"><button id="export">Download export</button><span class="hint" id="exportmsg"></span></div></section>
+<script>
+document.getElementById('export').onclick=async()=>{
+  const m=document.getElementById('exportmsg');
+  try{
+    const r=await fetch('api/export',{cache:'no-store',headers:{'x-requested-with':'admin'}});
+    const j=await r.json();
+    if(!r.ok)throw new Error((j.errors||['export failed']).join('; '));
+    const a=document.createElement('a');
+    a.href=URL.createObjectURL(new Blob([JSON.stringify(j,null,2)+'\\n'],{type:'application/json'}));
+    a.download='mcp-host-export.json';
+    document.body.appendChild(a);a.click();a.remove();
+    setTimeout(()=>URL.revokeObjectURL(a.href),1000);
+    m.textContent='Exported '+Object.keys(j.servers).length+' app(s).';
+  }catch(e){m.textContent=e.message}
+};
+</script>`,
   });
 }
 
