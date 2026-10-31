@@ -1,5 +1,11 @@
 # Changelog
 
+## 2.0.2
+
+- Show each server page's sections as tabs
+- Document the manifest fields and adding and removing a server
+- Add MIT license and use generic examples
+
 ## 2.0.1
 
 - Run tests by file glob so Node 22 finds them
