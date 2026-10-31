@@ -1,5 +1,9 @@
 # Changelog
 
+## 2.0.1
+
+- Run tests by file glob so Node 22 finds them
+
 ## 2.0.0
 
 - HA Server Host replaces MCP Host. It installs each server from its repo's latest GitHub release (a prebuilt bundle with an `ha-server.json` manifest) instead of cloning and building on the HA machine.
