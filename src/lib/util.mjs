@@ -1,5 +1,5 @@
 import { spawn } from 'node:child_process';
-import { appendFileSync, mkdirSync, readFileSync, writeFileSync, existsSync } from 'node:fs';
+import { appendFileSync, chmodSync, mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 
 export const DATA = process.env.DATA_DIR || '/data';
@@ -14,11 +14,14 @@ export function readJson(file, fallback) {
   }
 }
 
-export function writeJson(file, value) {
-  writeFileSync(file, JSON.stringify(value, null, 2));
+/** Write through a temp file so a crash mid-write never leaves half a file. */
+export function writeJson(file, value, { mode } = {}) {
+  mkdirSync(path.dirname(file), { recursive: true });
+  const tmp = `${file}.tmp`;
+  writeFileSync(tmp, JSON.stringify(value, null, 2) + '\n', mode ? { mode } : undefined);
+  renameSync(tmp, file);
+  if (mode) chmodSync(file, mode);
 }
-
-export const fileExists = existsSync;
 
 export function log(scope, msg) {
   console.log(`${new Date().toISOString()} [${scope}] ${msg}`);
@@ -44,14 +47,14 @@ export function recentIncidents(limit = 50) {
   }
 }
 
-/** Run a shell command to completion. Never throws; returns { code, output }. */
-export function run(cmd, { cwd, env, timeoutMs = 15 * 60_000 } = {}) {
+/** Run a program to completion without a shell. Never throws; returns { code, output }. */
+export function run(file, args, { cwd, timeoutMs = 10 * 60_000 } = {}) {
   return new Promise((resolve) => {
-    const child = spawn('sh', ['-c', cmd], { cwd, env: { ...process.env, ...env } });
+    const child = spawn(file, args, { cwd });
     let output = '';
     const cap = (d) => {
       output += d;
-      if (output.length > 200_000) output = output.slice(-100_000);
+      if (output.length > 100_000) output = output.slice(-50_000);
     };
     child.stdout.on('data', cap);
     child.stderr.on('data', cap);
@@ -68,3 +71,23 @@ export function run(cmd, { cwd, env, timeoutMs = 15 * 60_000 } = {}) {
 }
 
 export const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+export const ENV_NAME_RE = /^[A-Za-z_][A-Za-z0-9_]*$/;
+const MAX_VALUE = 64 * 1024;
+
+/** Validate a { set: {NAME: value}, remove: [NAME] } edit of environment variables. */
+export function validateEnvEdit(body, reserved = new Set()) {
+  const errors = [];
+  const set = body?.set ?? {};
+  const remove = body?.remove ?? [];
+  if (typeof set !== 'object' || set === null || Array.isArray(set)) errors.push('"set" must be an object');
+  else
+    for (const [k, v] of Object.entries(set)) {
+      if (!ENV_NAME_RE.test(k)) errors.push(`name "${k}" is invalid`);
+      else if (reserved.has(k)) errors.push(`${k} is set by the host`);
+      if (typeof v !== 'string' || v === '') errors.push(`${k} needs a non-empty value`);
+      else if (v.length > MAX_VALUE) errors.push(`${k} is too long`);
+    }
+  if (!Array.isArray(remove) || remove.some((k) => typeof k !== 'string')) errors.push('"remove" must be an array of names');
+  return errors;
+}

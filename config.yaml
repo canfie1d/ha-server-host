@@ -1,48 +1,30 @@
-name: MCP Host
-version: "1.0.14"
-slug: mcp_host
-description: Hosts your MCP servers and automatically heals them when they break
+name: HA Server Host
+version: "2.0.0"
+slug: ha_server_host
+description: Runs your servers from their GitHub releases, routes each hostname to its server and keeps them healthy
+url: https://github.com/canfie1d/ha-server-host
 arch:
   - amd64
-  - aarch64
 startup: services
 boot: auto
-init: false
 homeassistant_api: true
 ingress: true
 ingress_port: 8100
+panel_icon: mdi:server-network
+panel_title: Server Host
+panel_admin: true
 map:
   - addon_config:rw
-panel_icon: mdi:server-network
-panel_title: MCP Host
-# One host port per hosted app (see apps.json in the add-on config dir). Point Cloudflare Tunnel
-# hostnames at these. 8100 is the status UI and is served via HA ingress only.
+# The one public port. Cloudflare Tunnel sends every hostname here and the host routes each
+# request to the server that owns the hostname. 8100 is the panel, served through HA ingress only.
 ports:
-  8101/tcp: 8101
-  8102/tcp: 8102
-  8103/tcp: 8103
-  8104/tcp: 8104
-  8105/tcp: 8105
-image: ghcr.io/canfie1d/{arch}-addon-mcp-host
-options:
-  anthropic_api_key: ""
-  claude_model: claude-sonnet-5-5
-  notify_service: ""
-  auto_patch: true
-  max_patches_per_day: 3
-  github_token: ""
-  secrets: []
-schema:
-  anthropic_api_key: password?
-  claude_model: str
-  notify_service: str?
-  auto_patch: bool
-  max_patches_per_day: int(1,10)
-  github_token: password?
-  # Deprecated: secrets are now set on each app's page and stored in /data. This list is imported
-  # once on the first start of a version with per-app pages, then ignored. Kept in the schema so the
-  # Supervisor does not drop it before the import runs.
-  secrets:
-    - app: str
-      name: str
-      value: password
+  8110/tcp: 8110
+ports_description:
+  8110/tcp: Every hosted server, routed by hostname. Point Cloudflare Tunnel here.
+# The host's own liveness. A hosted server being down never fails it, so HA never restarts the
+# add-on (and with it every server) because of one server.
+watchdog: http://[HOST]:[PORT:8110]/heartbeat
+image: ghcr.io/canfie1d/{arch}-addon-ha-server-host
+# Settings live on the panel pages (stored in /data), not here.
+options: {}
+schema: {}

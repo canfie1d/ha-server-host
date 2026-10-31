@@ -10,8 +10,8 @@ on:
       - CHANGELOG.md
 
 jobs:
-  build:
-    name: Build server
+  test:
+    name: Check and test
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -20,5 +20,8 @@ jobs:
         with:
           node-version: 22
 
-      - name: Build
-        run: find src -name '*.mjs' -print0 | xargs -0 -n1 node --check
+      - name: Syntax
+        run: find src test -name '*.mjs' -print0 | xargs -0 -n1 node --check
+
+      - name: Test
+        run: node --test --test-timeout=240000 test/

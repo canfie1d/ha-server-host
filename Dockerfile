@@ -1,13 +1,8 @@
+# The host runs prebuilt server bundles, so the image needs only Node (servers are built for this
+# major version) and tar, which the base image has. HA's default init (tini) is PID 1.
 FROM node:22-slim
 
-RUN apt-get update \
- && apt-get install -y --no-install-recommends git ca-certificates tini python3 make g++ \
- && rm -rf /var/lib/apt/lists/* \
- && corepack enable
-
-WORKDIR /opt/supervisor
+WORKDIR /opt/server-host
 COPY src ./src
 
-ENV NODE_ENV=production
-ENTRYPOINT ["/usr/bin/tini", "--"]
 CMD ["node", "src/index.mjs"]
