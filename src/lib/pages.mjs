@@ -534,12 +534,10 @@ $('addf').addEventListener('submit',async e=>{
   });
 }
 
-/** The host's own settings, and the one-time import of settings and data from the old add-ons. */
+/** The host's own settings. */
 export function hostPage(h, layout) {
   return shell({
     title: 'Host · Server Host',
-    css: `pre.plan{margin:10px 0 0;padding:10px 12px;border:1px solid var(--line);border-radius:10px;background:var(--field);font:12px/1.5 ui-monospace,SFMono-Regular,Menlo,monospace;white-space:pre-wrap}
-pre.plan:empty{display:none}`,
     layout,
     body: `<header class="top"><div><h1>Host</h1><p class="overall">HA Server Host ${esc(h.version)} on Node ${esc(h.node)}. Public port ${esc(h.routerPort)}.</p></div></header>
 
@@ -553,13 +551,6 @@ pre.plan:empty{display:none}`,
 <h2 class="section-title">Cloudflare Tunnel</h2>
 <section class="panel"><p>Point every public hostname at <span class="mono">http://&lt;Home Assistant host&gt;:${esc(h.routerPort)}</span>. The host sends each request to the server that owns the hostname. <span class="mono">/heartbeat</span> and <span class="mono">/health</span> on any other hostname report on the host and all servers.</p></section>
 
-<h2 class="section-title">Import from the old add-ons</h2>
-<section class="panel">
-<p class="hint">One-time move of settings and data from the MCP Host and Financial Advisor add-ons. Download the export file from the old add-on's panel, add the server here first, then choose the file. You see what will change before anything is written. Existing data files are kept beside the new ones as <code>*.before-import</code>.</p>
-<div class="row"><input type="file" id="file" accept="application/json,.json" style="width:auto"><button id="apply" class="primary" disabled>Import</button></div>
-<pre class="plan" id="plan"></pre>
-<div class="msg" id="imsg"></div>
-</section>
 <script>
 ${CLIENT}
 const FIELDS=${json(h.fields)};
@@ -595,27 +586,6 @@ $('hrows').addEventListener('click',async e=>{
   if(!input.value){input.focus();return}
   if(await put({set:{[k]:input.value}}))input.value='';
 });
-let payload=null;
-function imsg(c,t){$('imsg').className='msg '+c;$('imsg').textContent=t}
-function planText(p){
-  return Object.entries(p).map(([n,x])=>n+':\\n  settings: '+(x.settings.join(', ')||'none')
-    +(x.replaces.length?'\\n  replaces current values of: '+x.replaces.join(', '):'')
-    +(x.skipped.length?'\\n  skipped (set by the host): '+x.skipped.join(', '):'')
-    +'\\n  data files: '+(x.files.join(', ')||'none')+(x.action?'\\n  then: '+x.action:'')).join('\\n\\n');
-}
-$('file').onchange=async()=>{
-  payload=null;$('apply').disabled=true;$('plan').textContent='';imsg('','');
-  const f=$('file').files[0];if(!f)return;
-  try{payload=JSON.parse(await f.text())}catch{imsg('bad','That file is not JSON.');return}
-  try{const j=await call('POST','api/import?dryRun=1',payload);$('plan').textContent=planText(j.plan);$('apply').disabled=false;imsg('','Check the list above, then choose Import.')}
-  catch(e){imsg('bad',e.message)}
-};
-$('apply').onclick=async()=>{
-  if(!payload)return;
-  $('apply').disabled=true;
-  try{const j=await call('POST','api/import',payload);$('plan').textContent=planText(j.plan);imsg('ok','Imported. Servers that were running restart with the new values.')}
-  catch(e){imsg('bad',e.message);$('apply').disabled=false}
-};
 render();
 </script>`,
   });

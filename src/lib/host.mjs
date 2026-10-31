@@ -1,10 +1,10 @@
 // The set of hosted servers and every operation on them: add, remove, update with automatic
-// rollback, settings, hostnames and imports. Each operation runs on one server at a time and
+// rollback, settings and hostnames. Each operation runs on one server at a time and
 // never stops or restarts any other server.
 import { randomUUID } from 'node:crypto';
-import { existsSync, mkdirSync, renameSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, rmSync } from 'node:fs';
 import path from 'node:path';
-import { LOGS, incident, log, recentIncidents, sleep, validateEnvEdit } from './util.mjs';
+import { LOGS, incident, log, recentIncidents, sleep } from './util.mjs';
 import { latestRelease, parseRepo } from './github.mjs';
 import { installBundle, pruneBundles, readManifest, removeBundles } from './bundles.mjs';
 import { HOSTNAME_RE, RESERVED_ENV } from './manifest.mjs';
@@ -12,7 +12,6 @@ import { ManagedServer } from './server.mjs';
 
 const FIRST_INTERNAL_PORT = 9100;
 const JOB_TTL_MS = 60 * 60_000;
-const IMPORT_FORMAT = 'ha-server-host-import';
 
 export function createHost({ store, notify, dismiss, reservedPorts = [] }) {
   const servers = new Map();
@@ -361,67 +360,6 @@ export function createHost({ store, notify, dismiss, reservedPorts = [] }) {
     save();
   }
 
-  // ---- import ------------------------------------------------------------
-
-  /**
-   * Import settings and data files exported by the old add-ons:
-   * { format: "ha-server-host-import", version: 1, source, servers: { <name>: { settings: {...},
-   *   files: { "<path under the server's DATA_DIR>": "<base64>" } } } }
-   * Each named server must already be added. Existing files are kept beside the new ones as
-   * <file>.before-import.
-   */
-  function importData(payload, { dryRun = false } = {}) {
-    const errors = [];
-    if (!payload || payload.format !== IMPORT_FORMAT || payload.version !== 1) return { ok: false, errors: ['this is not an HA Server Host import file'] };
-    const entries = Object.entries(payload.servers || {});
-    if (!entries.length) return { ok: false, errors: ['the file names no servers'] };
-    const plan = {};
-    for (const [name, data] of entries) {
-      const s = servers.get(name);
-      if (!s) {
-        errors.push(`add ${name} before importing its data`);
-        continue;
-      }
-      const settings = data.settings || {};
-      const usable = Object.fromEntries(Object.entries(settings).filter(([k]) => !RESERVED_ENV.has(k)));
-      const current = store.settings(name);
-      const files = Object.entries(data.files || {});
-      for (const [rel, b64] of files) {
-        const norm = path.posix.normalize(String(rel));
-        if (norm.startsWith('/') || norm.startsWith('..') || norm.includes('\0')) errors.push(`${name}: file path "${rel}" is not allowed`);
-        if (typeof b64 !== 'string') errors.push(`${name}: file "${rel}" must be base64 text`);
-      }
-      errors.push(...validateEnvEdit({ set: usable }, RESERVED_ENV).map((x) => `${name}: ${x}`));
-      plan[name] = {
-        settings: Object.keys(usable).sort(),
-        replaces: Object.keys(usable).filter((k) => current[k] !== undefined && current[k] !== usable[k]).sort(),
-        skipped: Object.keys(settings).filter((k) => RESERVED_ENV.has(k)).sort(),
-        files: files.map(([rel]) => path.posix.normalize(rel)).sort(),
-      };
-    }
-    if (errors.length) return { ok: false, errors, plan };
-    if (dryRun) return { ok: true, plan, source: payload.source || null };
-
-    for (const [name, data] of entries) {
-      const s = servers.get(name);
-      const usable = Object.fromEntries(Object.entries(data.settings || {}).filter(([k]) => !RESERVED_ENV.has(k)));
-      if (Object.keys(usable).length) {
-        const errs = store.updateSettings(name, { set: usable }, RESERVED_ENV);
-        if (errs.length) return { ok: false, errors: errs.map((x) => `${name}: ${x}`), plan };
-      }
-      for (const [rel, b64] of Object.entries(data.files || {})) {
-        const dest = path.join(s.dataDir, path.posix.normalize(rel));
-        mkdirSync(path.dirname(dest), { recursive: true });
-        if (existsSync(dest)) renameSync(dest, `${dest}.before-import`);
-        writeFileSync(dest, Buffer.from(b64, 'base64'), { mode: 0o600 });
-      }
-      s.note(`imported ${plan[name].settings.length} setting(s) and ${plan[name].files.length} file(s)${payload.source ? ` from ${payload.source}` : ''}`);
-      incident({ server: name, action: `imported settings and data${payload.source ? ` from ${payload.source}` : ''}` });
-      plan[name].action = applyLive(s, 'imported settings and data');
-    }
-    return { ok: true, plan, source: payload.source || null };
-  }
-
   // ---- routing and reporting ---------------------------------------------
 
   /** Router lookup: which server owns a hostname, and is it running. */
@@ -491,7 +429,6 @@ export function createHost({ store, notify, dismiss, reservedPorts = [] }) {
     updateSettings,
     setHostnames,
     setAutoUpdate,
-    importData,
     resolve,
     hostHealth,
     detail,

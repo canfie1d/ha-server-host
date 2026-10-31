@@ -1,6 +1,6 @@
 // End to end: a fake GitHub API serves real bundles, and the host runs as its own process.
 // Covers add, settings, routing by hostname, a failed update with automatic rollback, a good
-// update, manual rollback, crash recovery without touching the other server, import and remove.
+// update, manual rollback, crash recovery without touching the other server, and remove.
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import http from 'node:http';
@@ -393,40 +393,12 @@ test('stop and start one server', async () => {
   await until('other healthy again', async () => (await statusOf('other')).status === 'healthy');
 });
 
-test('import settings and data files from an old add-on', async () => {
-  const payload = {
-    format: 'ha-server-host-import',
-    version: 1,
-    source: 'mcp_host 1.0.14',
-    servers: {
-      demo: {
-        settings: { DEMO_SECRET: 'from-old-addon', EXTRA_ONE: 'x', PORT: '1' },
-        files: { 'state/state.json': Buffer.from('{"a":1}').toString('base64') },
-      },
-    },
-  };
-  const dry = await panel('POST', 'api/import?dryRun=1', payload);
-  assert.equal(dry.status, 200, dry.text);
-  assert.deepEqual(dry.json.plan.demo.settings, ['DEMO_SECRET', 'EXTRA_ONE']);
-  assert.deepEqual(dry.json.plan.demo.replaces, ['DEMO_SECRET']);
-  assert.deepEqual(dry.json.plan.demo.skipped, ['PORT']);
-  assert.ok(!existsSync(path.join(DATA, 'server-data/demo/state/state.json')));
-  const unknown = await panel('POST', 'api/import?dryRun=1', { ...payload, servers: { nope: {} } });
-  assert.equal(unknown.status, 400);
-  const evil = await panel('POST', 'api/import?dryRun=1', { ...payload, servers: { demo: { files: { '../../x': 'AA==' } } } });
-  assert.equal(evil.status, 400);
-  const r = await panel('POST', 'api/import', payload);
-  assert.equal(r.status, 200, r.text);
-  assert.equal(readFileSync(path.join(DATA, 'server-data/demo/state/state.json'), 'utf8'), '{"a":1}');
-  await until('demo restarted with imported secret', async () => (await routed('demo.example.com', '/whoami')).json?.secret === 'from-old-addon');
-});
-
 test('the panel pages render', async () => {
   for (const p of ['', 'server/demo', 'add', 'host']) {
     const r = await panel('GET', p);
     assert.equal(r.status, 200, p);
     assert.match(r.text, /<!doctype html>/);
-    assert.doesNotMatch(r.text, /s3cret|from-old-addon|test-github-token/, `${p} must not include secret values`);
+    assert.doesNotMatch(r.text, /s3cret|test-github-token/, `${p} must not include secret values`);
   }
 });
 

@@ -15,7 +15,6 @@ const UPDATE_INTERVAL_MS = Number(process.env.HOST_UPDATE_INTERVAL_MS) || 10 * 6
 const SUPERVISOR_IP = '172.30.32.2';
 const TRUST_ALL = process.env.HOST_TRUST_ALL === '1'; // local development only
 const MAX_BODY = 256 * 1024;
-const MAX_IMPORT = 50 * 1024 * 1024;
 
 const supervisorToken = process.env.SUPERVISOR_TOKEN || '';
 // Servers get an environment built from scratch, but keep the token out of reach anyway.
@@ -184,10 +183,6 @@ async function handle(req, res) {
   if (route === '/api/host/settings' && method === 'PUT') {
     const errors = store.updateHost(await readJsonBody(req));
     return errors.length ? fail(res, 400, ...errors) : sendJson(res, 200, { ok: true, ...hostSettingsView() });
-  }
-  if (route === '/api/import' && method === 'POST') {
-    const out = host.importData(await readJsonBody(req, MAX_IMPORT), { dryRun: url.searchParams.get('dryRun') === '1' });
-    return sendJson(res, out.ok ? 200 : 400, out);
   }
   if ((m = /^\/api\/server\/([^/]+)(?:\/([a-z]+))?$/.exec(route))) {
     return serverApi(req, res, url, decodeURIComponent(m[1]), m[2] || '');

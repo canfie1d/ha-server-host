@@ -155,13 +155,6 @@ To remove one, choose Remove on its page. The server is stopped and its releases
 choose whether to keep its settings and its `DATA_DIR` folder, so adding it again later can pick
 up where it left off.
 
-## Importing settings and data
-
-The Host page can import an export file (JSON) holding settings and data files for one or more
-servers, for example from an add-on the servers used to run in. The host lists every setting and
-data file it will write before anything changes; Import applies it and restarts only the affected
-servers. Existing data files are kept as `*.before-import`.
-
 ## Development
 
 ```sh
