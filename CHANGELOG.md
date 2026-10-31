@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.0.14
+
+- Export stored secrets for HA Server Host
+
 ## 1.0.13
 
 - Show stored secrets on app pages (#10)
