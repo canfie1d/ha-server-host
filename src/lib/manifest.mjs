@@ -3,7 +3,7 @@
 //
 // {
 //   "manifestVersion": 1,
-//   "name": "personal-chef",
+//   "name": "my-app",
 //   "displayName": "Personal Chef",
 //   "description": "Meal planning web app with an MCP server at /mcp",
 //   "version": "1.0.25",
@@ -13,7 +13,7 @@
 //   "env": { "MCP_IN_PROCESS": "1", "CHEF_RULES_DIR": "{{bundle}}/rules" },
 //   "health": { "heartbeat": "/heartbeat", "health": "/health", "startupSeconds": 90 },
 //   "mcp": { "path": "/mcp" },
-//   "hostnames": ["personal-chef.ryanandkaitlin.com"],
+//   "hostnames": ["my-app.example.com"],
 //   "hostSettings": ["turso"],
 //   "settings": [
 //     { "env": "AUTH_SECRET", "label": "Session secret", "secret": true, "required": true },

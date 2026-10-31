@@ -73,7 +73,7 @@ host's Node) so native modules match, plus `ha-server.json` at its root:
 ```json
 {
   "manifestVersion": 1,
-  "name": "personal-chef",
+  "name": "my-app",
   "displayName": "Personal Chef",
   "description": "Meal planning web app with an MCP server at /mcp",
   "version": "1.0.25",
@@ -83,7 +83,7 @@ host's Node) so native modules match, plus `ha-server.json` at its root:
   "env": { "MCP_IN_PROCESS": "1", "CHEF_RULES_DIR": "{{bundle}}/rules" },
   "health": { "heartbeat": "/heartbeat", "health": "/health", "startupSeconds": 90 },
   "mcp": { "path": "/mcp" },
-  "hostnames": ["personal-chef.ryanandkaitlin.com"],
+  "hostnames": ["my-app.example.com"],
   "hostSettings": [],
   "settings": [
     { "env": "AUTH_SECRET", "label": "Session secret", "secret": true, "required": true },
@@ -129,3 +129,7 @@ use it locally only. The panel is on port 8100 and the router on 8110 (`HOST_PAN
 Push a version tag (`git tag v2.0.1 && git push origin v2.0.1`). The Release workflow tests,
 publishes `ghcr.io/canfie1d/amd64-addon-ha-server-host:<version>` and records the version in
 `config.yaml` and `CHANGELOG.md` on `main`. Pushes to `main` only run CI.
+
+## License
+
+MIT. See [LICENSE](LICENSE).

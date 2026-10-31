@@ -204,8 +204,8 @@ const statusOf = async (name) => (await panel('GET', `api/server/${name}`)).json
 
 before(async () => {
   await startFakeGitHub();
-  publish('canfie1d/demo', 'v1.0.0', makeBundle('demo', 'v1.0.0'));
-  publish('canfie1d/other', 'v2.0.0', makeBundle('other', 'v2.0.0', { required: false }));
+  publish('example/demo', 'v1.0.0', makeBundle('demo', 'v1.0.0'));
+  publish('example/other', 'v2.0.0', makeBundle('other', 'v2.0.0', { required: false }));
   startHost();
   await until('panel', async () => (await panel('GET', 'status.json')).status === 200);
 });
@@ -219,7 +219,7 @@ after(async () => {
 });
 
 test('a private repo needs the GitHub token', async () => {
-  const r = await panel('POST', 'api/servers', { repo: 'canfie1d/demo' });
+  const r = await panel('POST', 'api/servers', { repo: 'example/demo' });
   assert.equal(r.status, 202);
   const j = await job(r.json.id);
   assert.equal(j.state, 'error');
@@ -236,7 +236,7 @@ test('host settings save, and secrets stay hidden from plain reads', async () =>
 });
 
 test('add a server from its repo; it waits for required settings', async () => {
-  const r = await panel('POST', 'api/servers', { repo: 'https://github.com/canfie1d/demo' });
+  const r = await panel('POST', 'api/servers', { repo: 'https://github.com/example/demo' });
   const j = await job(r.json.id);
   assert.equal(j.state, 'done', j.error);
   assert.deepEqual(j.result, { name: 'demo', tag: 'v1.0.0', missing: ['DEMO_SECRET', 'DEMO_URL'] });
@@ -246,7 +246,7 @@ test('add a server from its repo; it waits for required settings', async () => {
   assert.deepEqual(s.hostnames, ['demo.example.com']);
   const down = await routed('demo.example.com', '/heartbeat');
   assert.equal(down.status, 503);
-  const again = await panel('POST', 'api/servers', { repo: 'canfie1d/demo' });
+  const again = await panel('POST', 'api/servers', { repo: 'example/demo' });
   assert.equal(again.status, 409);
 });
 
@@ -275,7 +275,7 @@ test('settings apply live and the router sends the hostname to the server', asyn
 });
 
 test('a second server runs alongside on its own hostname and port', async () => {
-  const j = await job((await panel('POST', 'api/servers', { repo: 'canfie1d/other' })).json.id);
+  const j = await job((await panel('POST', 'api/servers', { repo: 'example/other' })).json.id);
   assert.equal(j.state, 'done', j.error);
   await until('other healthy', async () => (await statusOf('other')).status === 'healthy');
   const [a, b] = await Promise.all([statusOf('demo'), statusOf('other')]);
@@ -300,7 +300,7 @@ test('hostnames are editable and unique across servers', async () => {
 
 test('an update that fails its health check is rolled back automatically', async () => {
   const otherPid = (await routed('other.example.com', '/pid')).json.pid;
-  publish('canfie1d/demo', 'v1.1.0', makeBundle('demo', 'v1.1.0', { mode: 'bad-health' }));
+  publish('example/demo', 'v1.1.0', makeBundle('demo', 'v1.1.0', { mode: 'bad-health' }));
   const j = await job((await panel('POST', 'api/server/demo/update', {})).json.id);
   assert.equal(j.state, 'done', j.error);
   assert.equal(j.result.reverted, true);
@@ -314,7 +314,7 @@ test('an update that fails its health check is rolled back automatically', async
 });
 
 test('a good update installs and keeps the previous release for rollback', async () => {
-  publish('canfie1d/demo', 'v1.2.0', makeBundle('demo', 'v1.2.0'));
+  publish('example/demo', 'v1.2.0', makeBundle('demo', 'v1.2.0'));
   const j = await job((await panel('POST', 'api/server/demo/update', {})).json.id);
   assert.equal(j.result.updated, true, JSON.stringify(j));
   const s = await statusOf('demo');
