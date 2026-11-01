@@ -1,5 +1,5 @@
 name: HA Server Host
-version: "2.0.4"
+version: "2.0.5"
 slug: ha_server_host
 description: Runs your servers from their GitHub releases, routes each hostname to its server and keeps them healthy
 url: https://github.com/canfie1d/ha-server-host

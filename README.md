@@ -23,7 +23,7 @@ Install: HA > Settings > Add-ons > Add-on Store > ⋮ > Repositories > add
 - **Isolation.** Each server is its own process group with its own environment, port, data folder
   and log. A crash, restart, update or settings change on one server never restarts another.
   Updating the add-on itself restarts all of them.
-- **Updates.** With automatic updates on (the default, per server) the host checks every 10
+- **Updates.** With automatic updates on (the default, per server) the host checks every 2
   minutes for a new release. Update on the page installs the latest release now.
 
 ## Health and failure handling

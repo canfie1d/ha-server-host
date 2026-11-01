@@ -1,5 +1,9 @@
 # Changelog
 
+## 2.0.5
+
+- Check for new server releases every 2 minutes instead of every 10
+
 ## 2.0.4
 
 - Show panel times in Home Assistant's time zone

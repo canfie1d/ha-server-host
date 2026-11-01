@@ -11,7 +11,7 @@ import { addPage, hostPage, overviewPage, serverPage } from './lib/pages.mjs';
 const PANEL_PORT = Number(process.env.HOST_PANEL_PORT) || 8100; // HA ingress
 const ROUTER_PORT = Number(process.env.HOST_ROUTER_PORT) || 8110; // the one published port
 const CHECK_INTERVAL_MS = Number(process.env.HOST_CHECK_INTERVAL_MS) || 30_000;
-const UPDATE_INTERVAL_MS = Number(process.env.HOST_UPDATE_INTERVAL_MS) || 10 * 60_000;
+const UPDATE_INTERVAL_MS = Number(process.env.HOST_UPDATE_INTERVAL_MS) || 2 * 60_000;
 const SUPERVISOR_IP = '172.30.32.2';
 const TRUST_ALL = process.env.HOST_TRUST_ALL === '1'; // local development only
 const MAX_BODY = 256 * 1024;
