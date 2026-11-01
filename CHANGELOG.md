@@ -1,5 +1,9 @@
 # Changelog
 
+## 2.0.4
+
+- Show panel times in Home Assistant's time zone
+
 ## 2.0.3
 
 - Remove the one-time import from the old add-ons now that the move is done
