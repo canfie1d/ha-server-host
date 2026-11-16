@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 2.1.0
 
 - Add a token-authenticated admin API on the router port (`admin_hostname` and `admin_token` on the Host page) that serves the panel's JSON API: add servers, write settings including secrets (names only on reads), start, stop, restart, update, roll back and remove
 
