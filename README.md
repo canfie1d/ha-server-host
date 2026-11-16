@@ -155,6 +155,38 @@ To remove one, choose Remove on its page. The server is stopped and its releases
 choose whether to keep its settings and its `DATA_DIR` folder, so adding it again later can pick
 up where it left off.
 
+### Admin API
+
+The panel's JSON API only answers Home Assistant's ingress proxy. To drive the host from a script,
+CI job or an agent, turn on the admin API on the Host page:
+
+1. Set **Admin API hostname** (for example `ha-server-host.example.com`) and point that hostname at
+   port 8110 like any other.
+2. Set **Admin API token**, a random value of 32+ characters (`openssl rand -hex 32`).
+
+Both must be set; until then the hostname answers nothing. Requests send
+`Authorization: Bearer <token>` and, when they are not GET, `Content-Type: application/json`.
+Only `/status.json` and `/api/*` are served on that hostname, never the HTML pages. A hostname
+that a server owns always goes to that server.
+
+| Request | Does |
+|---|---|
+| `GET /status.json` | every server's status and recent incidents |
+| `POST /api/servers` `{ "repo": "owner/repo" }` | add a server; returns a job id |
+| `GET /api/jobs/<id>` | progress of an add or update |
+| `GET /api/server/<name>` | one server's details |
+| `PUT /api/server/<name>/settings` `{ "set": {"NAME": "value"}, "remove": ["NAME"] }` | write settings, secrets included |
+| `GET /api/server/<name>/settings` | the names of the settings that are set |
+| `PUT /api/server/<name>/hostnames` `{ "hostnames": [...] }` | set public hostnames |
+| `POST /api/server/<name>/start`, `stop`, `restart`, `update`, `rollback`, `remove` | the same actions as the server page |
+| `GET`/`PUT /api/host/settings` | host settings (GitHub token, notify service, shared Turso) |
+
+Secrets can be written but are never returned: settings reads list names only. The admin API cannot
+change the admin hostname or token; that stays a panel action. After 10 wrong tokens from one client
+(60 across all clients) in 5 minutes, every request gets 429 until the window passes. Without a
+tunnel, a client on the LAN can send the same request to port 8110 with a `Host` header set to the
+admin hostname.
+
 ## Development
 
 ```sh

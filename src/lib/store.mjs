@@ -16,6 +16,8 @@ export const HOST_FIELDS = [
   { key: 'notify_service', label: 'Notify service', note: 'Optional, e.g. notify.mobile_app_ryans_iphone. Alerts always appear as Home Assistant notifications; this also pushes them to a phone.' },
   { key: 'turso_database_url', label: 'Shared Turso URL', note: 'Optional. Passed as TURSO_DATABASE_URL to servers whose manifest asks for host Turso settings.' },
   { key: 'turso_auth_token', label: 'Shared Turso token', secret: true, note: 'Optional. Passed as TURSO_AUTH_TOKEN alongside the URL.' },
+  { key: 'admin_hostname', label: 'Admin API hostname', note: 'Optional. The hostname that serves the token-authenticated admin API on the router port (for example ha-server-host.example.com). Point it at port 8110 like any other hostname.' },
+  { key: 'admin_token', label: 'Admin API token', secret: true, note: 'Optional. A long random bearer token (32+ characters, for example from openssl rand -hex 32). The admin API stays off until this and the hostname are both set.' },
 ];
 const HOST_KEYS = new Set(HOST_FIELDS.map((f) => f.key));
 
@@ -67,11 +69,13 @@ export function createStore() {
           if (!HOST_KEYS.has(k)) errors.push(`unknown host setting "${k}"`);
           else if (typeof v !== 'string' || !v.trim()) errors.push(`${k} needs a non-empty value`);
           else if (k === 'notify_service' && !/^(notify\.)?[a-z0-9_]+$/.test(v.trim())) errors.push('notify service must look like notify.mobile_app_phone');
+          else if (k === 'admin_token' && v.trim().length < 32) errors.push('admin token must be at least 32 characters');
+          else if (k === 'admin_hostname' && !/^[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)+$/i.test(v.trim())) errors.push('admin hostname must look like ha-server-host.example.com');
         }
       if (!Array.isArray(remove) || remove.some((k) => !HOST_KEYS.has(k))) errors.push('"remove" must list host setting names');
       if (errors.length) return errors;
       const next = { ...host };
-      for (const [k, v] of Object.entries(set)) next[k] = v.trim();
+      for (const [k, v] of Object.entries(set)) next[k] = k === 'admin_hostname' ? v.trim().toLowerCase() : v.trim();
       for (const k of remove) delete next[k];
       host = next;
       writeJson(HOST_FILE, host, { mode: PRIVATE });

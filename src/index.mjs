@@ -6,6 +6,7 @@ import { createStore, HOST_FIELDS } from './lib/store.mjs';
 import { createNotifier } from './lib/notify.mjs';
 import { createHost } from './lib/host.mjs';
 import { createRouter } from './lib/router.mjs';
+import { createAdminAuth } from './lib/admin.mjs';
 import { addPage, hostPage, overviewPage, serverPage } from './lib/pages.mjs';
 
 const PANEL_PORT = Number(process.env.HOST_PANEL_PORT) || 8100; // HA ingress
@@ -111,11 +112,13 @@ const fail = (res, status, ...errors) => sendJson(res, status, { ok: false, erro
 const isJson = (req) => String(req.headers['content-type'] || '').startsWith('application/json');
 const peerOf = (req) => String(req.socket.remoteAddress || '').replace(/^::ffff:/, '');
 
-async function serverApi(req, res, url, name, op) {
+async function serverApi(req, res, url, name, op, admin) {
   const method = req.method;
   host.get(name); // 404 for an unknown server
   if (!op && method === 'GET') return sendJson(res, 200, host.detail(name));
   if (op === 'settings' && method === 'GET') {
+    // Names only for the admin API: secrets can be written there but never read back.
+    if (admin) return sendJson(res, 200, { ok: true, set: Object.keys(host.secretValues(name)).sort() });
     // Plaintext values, only for the page's own fetch.
     if (req.headers['x-requested-with'] !== 'admin') return fail(res, 400, 'missing header');
     return sendJson(res, 200, { ok: true, values: host.secretValues(name) });
@@ -157,9 +160,13 @@ async function serverApi(req, res, url, name, op) {
   }
 }
 
-async function handle(req, res) {
+// The admin API may not change how it is itself protected; that stays a panel action.
+const ADMIN_ONLY_FROM_PANEL = new Set(['admin_token', 'admin_hostname']);
+
+async function handle(req, res, { admin = false } = {}) {
   // Only Home Assistant's ingress proxy may reach the panel; other add-ons on the network may not.
-  if (!TRUST_ALL && peerOf(req) !== SUPERVISOR_IP) return fail(res, 403, 'the panel is only available through Home Assistant');
+  // The admin API arrives through the router and has already been authenticated by its bearer token.
+  if (!admin && !TRUST_ALL && peerOf(req) !== SUPERVISOR_IP) return fail(res, 403, 'the panel is only available through Home Assistant');
   const url = new URL(req.url || '/', 'http://x');
   const route = url.pathname.replace(/\/+$/, '') || '/';
   const method = req.method || 'GET';
@@ -177,18 +184,25 @@ async function handle(req, res) {
     return sendJson(res, 202, { ok: true, id: job.id });
   }
   if (route === '/api/host/settings' && method === 'GET') {
+    if (admin) return sendJson(res, 200, { ok: true, ...hostSettingsView() });
     if (req.headers['x-requested-with'] !== 'admin') return fail(res, 400, 'missing header');
     return sendJson(res, 200, { ok: true, values: store.host() });
   }
   if (route === '/api/host/settings' && method === 'PUT') {
-    const errors = store.updateHost(await readJsonBody(req));
+    const body = await readJsonBody(req);
+    if (admin) {
+      const touched = [...Object.keys(body?.set ?? {}), ...(Array.isArray(body?.remove) ? body.remove : [])];
+      if (touched.some((k) => ADMIN_ONLY_FROM_PANEL.has(k))) return fail(res, 403, 'the admin API settings can only be changed from the panel');
+    }
+    const errors = store.updateHost(body);
     return errors.length ? fail(res, 400, ...errors) : sendJson(res, 200, { ok: true, ...hostSettingsView() });
   }
   if ((m = /^\/api\/server\/([^/]+)(?:\/([a-z]+))?$/.exec(route))) {
-    return serverApi(req, res, url, decodeURIComponent(m[1]), m[2] || '');
+    return serverApi(req, res, url, decodeURIComponent(m[1]), m[2] || '', admin);
   }
 
   if (method !== 'GET') return fail(res, 405, 'method not allowed');
+  if (admin) return fail(res, 404, 'not found');
   if ((m = /^\/server\/([^/]+)$/.exec(route))) {
     const name = decodeURIComponent(m[1]);
     if (host.servers.has(name)) return send(res, 200, 'text/html', serverPage(host.detail(name), layout(req, `server:${name}`)));
@@ -200,19 +214,33 @@ async function handle(req, res) {
   return fail(res, 404, 'not found');
 }
 
-const panel = createServer((req, res) => {
-  handle(req, res).catch((err) => {
+const guarded = (req, res, opts) =>
+  handle(req, res, opts).catch((err) => {
     if (!err.status) log('host', `panel error: ${err.stack || err}`);
     if (!res.headersSent) fail(res, err.status || 500, err.message);
     else res.end();
   });
-});
+
+const panel = createServer((req, res) => guarded(req, res));
+
+// ---- admin API (router port, bearer token) ------------------------------------
+
+const adminAuth = createAdminAuth({ hostSettings: store.host });
+const admin = {
+  handles: adminAuth.handles,
+  handle(req, res) {
+    const verdict = adminAuth.check(req);
+    if (!verdict.ok) return fail(res, verdict.status, verdict.error);
+    return guarded(req, res, { admin: true });
+  },
+};
 
 // ---- router ----------------------------------------------------------------
 
 const router = createRouter({
   resolve: host.resolve,
   hostHealth: async () => host.hostHealth(),
+  admin,
   onError: (name, err) => log(name, `proxy error: ${err.code || err.message}`),
 });
 
