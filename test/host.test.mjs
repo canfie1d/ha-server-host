@@ -402,6 +402,107 @@ test('the panel pages render', async () => {
   }
 });
 
+// ---- admin API: the panel's JSON API on the router port, behind a bearer token -----------------
+
+const ADMIN_HOST = 'ha-server-host.example.com';
+const ADMIN_TOKEN = 'a'.repeat(16) + 'b'.repeat(16) + 'c'.repeat(8);
+
+function adminCall(method, p, { body, token = ADMIN_TOKEN, hostname = ADMIN_HOST } = {}) {
+  return new Promise((resolve, reject) => {
+    const headers = { host: hostname };
+    if (token) headers.authorization = `Bearer ${token}`;
+    if (body !== undefined) headers['content-type'] = 'application/json';
+    const req = http.request({ host: '127.0.0.1', port: ROUTER, method, path: `/${p}`, headers }, (res) => {
+      let text = '';
+      res.on('data', (d) => (text += d));
+      res.on('end', () => {
+        let json = null;
+        try {
+          json = JSON.parse(text);
+        } catch {}
+        resolve({ status: res.statusCode, json, text });
+      });
+    });
+    req.on('error', reject);
+    req.end(body === undefined ? undefined : JSON.stringify(body));
+  });
+}
+
+test('the admin API is off until a hostname and token are set', async () => {
+  assert.equal((await adminCall('GET', 'status.json')).status, 404);
+  const short = await panel('PUT', 'api/host/settings', { set: { admin_token: 'too-short', admin_hostname: ADMIN_HOST } });
+  assert.equal(short.status, 400);
+  const badHost = await panel('PUT', 'api/host/settings', { set: { admin_token: ADMIN_TOKEN, admin_hostname: 'not a host' } });
+  assert.equal(badHost.status, 400);
+  const ok = await panel('PUT', 'api/host/settings', { set: { admin_token: ADMIN_TOKEN, admin_hostname: ADMIN_HOST } });
+  assert.equal(ok.status, 200, ok.text);
+  assert.ok(ok.json.set.includes('admin_token'));
+  assert.equal(ok.json.plain.admin_token, undefined, 'the token must not be echoed');
+  assert.equal(ok.json.plain.admin_hostname, ADMIN_HOST);
+});
+
+test('the admin API needs the right bearer token', async () => {
+  assert.equal((await adminCall('GET', 'status.json', { token: null })).status, 401);
+  assert.equal((await adminCall('GET', 'status.json', { token: 'x'.repeat(40) })).status, 401);
+  const r = await adminCall('GET', 'status.json');
+  assert.equal(r.status, 200, r.text);
+  assert.ok(r.json.servers.some((s) => s.name === 'other'));
+  // Only the configured hostname serves it, and only the JSON API, never the HTML pages.
+  const toServer = await adminCall('GET', 'status.json', { hostname: 'other.example.com' });
+  assert.equal(toServer.status, 404);
+  assert.equal(toServer.json.error, 'not found', 'a server hostname still goes to its own server');
+  assert.equal((await adminCall('GET', 'server/other')).status, 404);
+  assert.equal((await adminCall('GET', '')).status, 404);
+  assert.equal((await adminCall('GET', 'heartbeat', { token: null })).status, 200, 'the host heartbeat stays open');
+});
+
+test('the admin API takes secrets but never returns them', async () => {
+  const set = await adminCall('PUT', 'api/server/other/settings', { body: { set: { EXTRA_SECRET: 'admin-written-secret' } } });
+  assert.equal(set.status, 200, set.text);
+  const names = await adminCall('GET', 'api/server/other/settings');
+  assert.equal(names.status, 200);
+  assert.deepEqual(names.json.set, ['EXTRA_SECRET']);
+  assert.doesNotMatch(names.text, /admin-written-secret/);
+  const hostNames = await adminCall('GET', 'api/host/settings');
+  assert.ok(hostNames.json.set.includes('github_token'));
+  assert.doesNotMatch(hostNames.text, new RegExp(`${TOKEN}|${ADMIN_TOKEN}`));
+  assert.doesNotMatch((await adminCall('GET', 'api/server/other')).text, /admin-written-secret/);
+  await adminCall('PUT', 'api/server/other/settings', { body: { remove: ['EXTRA_SECRET'] } });
+});
+
+test('the admin API adds a server from a repo', async () => {
+  publish('example/viaadmin', 'v1.0.0', makeBundle('viaadmin', 'v1.0.0', { required: false }));
+  const r = await adminCall('POST', 'api/servers', { body: { repo: 'example/viaadmin' } });
+  assert.equal(r.status, 202, r.text);
+  let j;
+  await until('add job', async () => {
+    j = (await adminCall('GET', `api/jobs/${r.json.id}`)).json;
+    return j.state !== 'running';
+  }, 60_000);
+  assert.equal(j.state, 'done', j.error);
+  await until('viaadmin healthy', async () => (await statusOf('viaadmin')).status === 'healthy');
+  assert.equal((await adminCall('POST', 'api/server/viaadmin/remove', { body: {} })).status, 200);
+});
+
+test('the admin API cannot change its own token or hostname', async () => {
+  const r = await adminCall('PUT', 'api/host/settings', { body: { set: { admin_token: 'z'.repeat(40) } } });
+  assert.equal(r.status, 403);
+  const rm = await adminCall('PUT', 'api/host/settings', { body: { remove: ['admin_hostname'] } });
+  assert.equal(rm.status, 403);
+  assert.equal((await adminCall('GET', 'status.json')).status, 200);
+  const other = await adminCall('PUT', 'api/host/settings', { body: { set: { notify_service: 'notify.mobile_app_test' } } });
+  assert.equal(other.status, 200, other.text);
+  await adminCall('PUT', 'api/host/settings', { body: { remove: ['notify_service'] } });
+});
+
+test('repeated wrong tokens are throttled', async () => {
+  let last;
+  for (let i = 0; i < 12; i++) last = await adminCall('GET', 'status.json', { token: `wrong-${i}` });
+  assert.equal(last.status, 429);
+  // Throttled even with the right token, so guessing cannot continue unnoticed.
+  assert.equal((await adminCall('GET', 'status.json')).status, 429);
+});
+
 test('remove a server, deleting its settings and data', async () => {
   const r = await panel('POST', 'api/server/demo/remove', { keepSettings: false, keepData: false });
   assert.equal(r.status, 200, r.text);

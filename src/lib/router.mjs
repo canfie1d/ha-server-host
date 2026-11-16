@@ -27,11 +27,14 @@ const sendJson = (res, status, body, extra = {}) => {
 };
 
 /**
+ * admin, when given, is { handles(hostname, path), handle(req, res) } for the token-authenticated
+ * admin API; it only sees requests for a hostname no server owns.
+ *
  * resolve(hostname) returns null for an unknown host, { name, unavailable } for a server that
  * is not running, or { name, port }. hostHealth() returns { heartbeat, health } bodies for the
  * host's own endpoints.
  */
-export function createRouter({ resolve, hostHealth, onError = () => {} }) {
+export function createRouter({ resolve, hostHealth, admin, onError = () => {} }) {
   const server = http.createServer(async (req, res) => {
     const hostname = requestHost(req);
     const target = resolve(hostname);
@@ -39,6 +42,7 @@ export function createRouter({ resolve, hostHealth, onError = () => {} }) {
     if (target) return sendJson(res, 503, { error: `${target.name} is not running`, reason: target.unavailable }, { 'retry-after': '30' });
 
     const pathOnly = (req.url || '/').split('?')[0];
+    if (admin?.handles(hostname, pathOnly)) return admin.handle(req, res);
     if (req.method === 'GET' && pathOnly === '/heartbeat') {
       // The host itself is alive. Server problems never fail this, so the HA watchdog never
       // restarts the add-on (and with it every server) because one server is down.
