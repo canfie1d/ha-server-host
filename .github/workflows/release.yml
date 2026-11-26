@@ -25,7 +25,7 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: 22
+          node-version: 24
 
       - name: Test
         run: node --test --test-timeout=240000 test/*.test.mjs

@@ -1,5 +1,9 @@
 # Changelog
 
+## 2.2.0
+
+- Run on Node 24. Server releases built for Node 22 do not start on this version; each server runs again once the host installs its Node 24 release
+
 ## 2.1.0
 
 - Add a token-authenticated admin API on the router port (`admin_hostname` and `admin_token` on the Host page) that serves the panel's JSON API: add servers, write settings including secrets (names only on reads), start, stop, restart, update, roll back and remove
