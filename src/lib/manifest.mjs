@@ -7,7 +7,7 @@
 //   "displayName": "My App",
 //   "description": "Web app with an MCP server at /mcp",
 //   "version": "1.0.25",
-//   "node": 22,
+//   "node": 24,
 //   "start": ["node", "web/.output/server/index.mjs"],
 //   "port": 3000,
 //   "env": { "MCP_IN_PROCESS": "1", "CHEF_RULES_DIR": "{{bundle}}/rules" },

@@ -66,7 +66,7 @@ never restarts the add-on.
 
 A server repo needs a release workflow that, on a version tag, builds the server and attaches
 `bundle-linux-x64.tar.gz` (and optionally its `.sha256`) to a GitHub Release. The archive holds
-everything needed to run with no install or build step, built on linux-x64 with Node 22 (the
+everything needed to run with no install or build step, built on linux-x64 with Node 24 (the
 host's Node) so native modules match, plus `ha-server.json` at its root.
 
 The smallest manifest:
@@ -90,7 +90,7 @@ A fuller one:
   "displayName": "My App",
   "description": "Web app with an MCP server at /mcp",
   "version": "1.2.0",
-  "node": 22,
+  "node": 24,
   "start": ["node", "web/.output/server/index.mjs"],
   "port": 3000,
   "env": { "RULES_DIR": "{{bundle}}/rules", "CACHE_DIR": "{{data}}/cache" },
